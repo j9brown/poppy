@@ -10,6 +10,7 @@ _FAN_POLL_INTERVAL_SECONDS = 2
 
 class PoppyPlugin(
     octoprint.plugin.StartupPlugin,
+    octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.TemplatePlugin
@@ -18,7 +19,8 @@ class PoppyPlugin(
     def __init__(self):
         self._fan = None
         self._fan_poll_timer = None
-        self._fan_target_temperature = 40
+        self._heating = False
+        self._heating_changed = False
     
     def _init_fan(self):
         try:
@@ -30,30 +32,66 @@ class PoppyPlugin(
         self._logger.info("Initialized the fan controller")
         self._fan_poll_timer = RepeatedTimer(_FAN_POLL_INTERVAL_SECONDS, self._poll_fan, run_first = True)
         self._fan_poll_timer.start()
-    
+
+    def _release_fan(self):
+        fan = self._fan
+        self._fan = None
+        if fan:
+            try:
+                fan.close()
+            except Exception:
+                self._logger.error("Failed to release the fan controller", exc_info = True)
+
     def _poll_fan(self):
+        if self._heating_changed:
+            self._heating_changed = False
+            self._update_fan_target_temperature()
         if self._fan:
             try:
                 self._fan.poll()
-                self._logger.info("fan: int %s, ext %s, spd %s, status %s",
-                    self._fan.internal_temperature,
-                    self._fan.external_temperature,
-                    self._fan.fan_speed,
-                    self._fan.status)
             except Exception:
                 self._logger.error("Failed to poll the fan controller", exc_info = True)
+                return
+            self._logger.info("fan: int %s, ext %s, tgt %s, spd %s, status %s",
+                self._fan.internal_temperature,
+                self._fan.external_temperature,
+                self._fan.target_temperature,
+                self._fan.fan_speed,
+                self._fan.status)
+
+    def _update_fan_target_temperature(self):
+        if self._fan:
+            try:
+                self._fan.target_temperature = self._settings.get_int([
+                    "chamber_target_temperature_when_heating" if self._heating else
+                    "chamber_target_temperature_when_cooling"])
+                self._logger.info("new target temperature %s, heating %s",
+                        self._fan.target_temperature, self._heating)
+            except Exception:
+                self._logger.error("Failed to update fan target temperature", exc_info = True)
 
     ##~~ StartupPlugin mixin
 
     def on_after_startup(self):
         self._init_fan()
+        self._update_fan_target_temperature()
+
+    ##~~ ShutdownPlugin mixin
+
+    def on_shutdown(self):
+        self._release_fan()
 
     ##~~ SettingsPlugin mixin
 
     def get_settings_defaults(self):
         return {
-            # put your plugin's default settings here
+            "chamber_target_temperature_when_heating": 40,
+            "chamber_target_temperature_when_cooling": 30
         }
+
+    def on_settings_save(self, data):
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        self._update_fan_target_temperature()
 
     ##~~ AssetPlugin mixin
 
@@ -66,12 +104,24 @@ class PoppyPlugin(
             "less": ["less/poppy.less"]
         }
 
+    ##~~ TemplatePlugin mixin
+
+    def get_template_configs(self):
+        return [
+            dict(type="settings", custom_bindings=False)
+        ]
+
     ##~~ Temperatures hook
 
     def get_temperatures(self, comm, parsed_temps):
+        heating = parsed_temps.get("B", (0, 0))[1] > 0
+        if self._heating != heating:
+            self._heating = heating
+            self._heating_changed = True
+
         if self._fan:
             parsed_temps["fan_internal"] = (self._fan.internal_temperature, None)
-            parsed_temps["fan_external"] = (self._fan.external_temperature, self._fan_target_temperature)
+            parsed_temps["fan_external"] = (self._fan.external_temperature, self._fan.target_temperature)
         return parsed_temps
 
     ##~~ Softwareupdate hook

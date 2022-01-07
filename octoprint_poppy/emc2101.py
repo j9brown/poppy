@@ -30,6 +30,7 @@ _REGISTER_TACH_LIMIT_LSB = 0x48
 _REGISTER_TACH_LIMIT_MSB = 0x49
 _REGISTER_FAN_CONFIG = 0x4a
 _REGISTER_FAN_SPIN_UP = 0x4b
+_REGISTER_FAN_SETTING = 0x4c
 _REGISTER_FAN_PWM_FREQ = 0x4d
 _REGISTER_FAN_PWM_FREQ_DIVIDE = 0x4e
 _REGISTER_FAN_LUT_HYSTERESIS = 0x4f
@@ -49,7 +50,7 @@ _DEFAULT_TEMPERATURE_LIMITS = {
     "external_temperature_critical": 60
 }
 
-_DEFAULT_TEMPERATURE_TARGET = 30
+_DEFAULT_TARGET_TEMPERATURE = 0
 
 def _toSignedByte(x):
     return x if x < 128 else x - 256
@@ -59,6 +60,8 @@ class EMC2101():
         self._bus = SMBus(bus_number)
         self._internal_temperature = 0
         self._external_temperature = 0
+        self._target_temperature = _DEFAULT_TARGET_TEMPERATURE
+        self._temperature_limits = _DEFAULT_TEMPERATURE_LIMITS
         self._fan_speed = 0
         self._status = {
             "internal_temperature_high": False,
@@ -71,8 +74,8 @@ class EMC2101():
 
         self._check_chip_id()
         self._configure_static()
-        self._configure_temperature_limits(_DEFAULT_TEMPERATURE_LIMITS)
-        self._configure_temperature_target(_DEFAULT_TEMPERATURE_TARGET)
+        self._configure_temperature_limits()
+        self._configure_temperature_target()
     
     def _check_chip_id(self):
         pid = self._bus.read_byte_data(_CHIP_ADDRESS, _REGISTER_PRODUCT_ID)
@@ -112,49 +115,55 @@ class EMC2101():
         # the tach limit is reached.  Goal is to minimize start-up noise.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_SPIN_UP, 0x2f)
 
+        # Turn the fan off when the LUT is not used.
+        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_SETTING, 0)
+
         # Enable averaging level 1 to guard against electrical noise.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_AVERAGING_FILTER, 0x02)
 
-    def _configure_temperature_limits(self, limits):
+    def _configure_temperature_limits(self):
         # Set temperature limits for status alerts.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_INTERNAL_HIGH,
-                limits["internal_temperature_high"])
+                self._temperature_limits["internal_temperature_high"])
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_EXTERNAL_LOW_MSB,
-                limits["external_temperature_low"])
+                self._temperature_limits["external_temperature_low"])
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_EXTERNAL_LOW_LSB, 0)
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_EXTERNAL_HIGH_MSB,
-                limits["external_temperature_high"])
+                self._temperature_limits["external_temperature_high"])
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_EXTERNAL_HIGH_LSB, 0)
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_TCRIT,
-                limits["external_temperature_critical"])
+                self._temperature_limits["external_temperature_critical"])
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_LIMIT_TCRIT_HYSTERESIS,
-                limits["external_temperature_critical"] - limits["external_temperature_high"])
+                self._temperature_limits["external_temperature_critical"] -
+                self._temperature_limits["external_temperature_high"])
 
-    def _configure_temperature_target(self, target):
+    def _configure_temperature_target(self):
         # Set fan configuration and look-up table.
         # The configuration register is written twice: first to make the LUT writable
-        # and then again to enable the LUT and make it read-only.
+        # and then to enable the LUT and make it read-only. Because the fan setting register
+        # is initialized to zero, the fan will be turned off if the LUT remains disabled.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_CONFIG, 0x27)
+        if self._target_temperature > 0:
+            # Set hysteresis to 1 to allow for more fine-grained control of the temperature
+            # around the target.
+            self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_HYSTERESIS, 1)
 
-        # Set hysteresis to 1 to allow for more fine-grained control of the temperature
-        # around the target
-        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_HYSTERESIS, 1)
+            # Prepare a look-up table designed to keep the temperature close to the target.
+            self._write_lut_entry(0, self._target_temperature - 1, 0)
+            self._write_lut_entry(1, self._target_temperature + 1, 20)
+            self._write_lut_entry(2, self._target_temperature + 2, 40)
+            self._write_lut_entry(3, self._target_temperature + 3, 60)
+            self._write_lut_entry(4, self._target_temperature + 4, 80)
+            self._write_lut_entry(5, self._target_temperature + 5, 100)
+            self._write_lut_padding(6)
+            self._write_lut_padding(7)
 
-        # Prepare a look-up table designed to keep the temperature close to the target.
-        self._write_lut_entry(0, target - 1, 0)
-        self._write_lut_entry(1, target + 1, 20)
-        self._write_lut_entry(2, target + 2, 40)
-        self._write_lut_entry(3, target + 3, 60)
-        self._write_lut_entry(4, target + 4, 80)
-        self._write_lut_entry(5, target + 5, 100)
-        self._write_lut_padding(6)
-        self._write_lut_padding(7)
-
-        # Enable the look-up table.
-        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_CONFIG, 0x07)
+            # Enable the look-up table.
+            self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_CONFIG, 0x07)
 
     def _write_lut_entry(self, index, temperature, duty_cycle):
-        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_T1 + index * 2, temperature)
+        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_T1 + index * 2,
+                min(max(int(temperature), 0), 127))
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_S1 + index * 2,
                 math.ceil(duty_cycle * _PWM_FULL_DUTY / 100))
 
@@ -204,6 +213,17 @@ class EMC2101():
     @property
     def external_temperature(self):
         return self._external_temperature
+
+    @property
+    def target_temperature(self):
+        return self._target_temperature
+
+    @target_temperature.setter
+    def target_temperature(self, value):
+        value = int(value)
+        if value != self._target_temperature:
+            self._target_temperature = value
+            self._configure_temperature_target()
 
     @property
     def fan_speed(self):
