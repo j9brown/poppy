@@ -72,6 +72,11 @@ class PoppyPlugin(
 
     ##~~ StartupPlugin mixin
 
+    def on_startup(self, host, port):
+        helpers = self._plugin_manager.get_helpers("psucontrol", "register_plugin")
+        if helpers and "register_plugin" in helpers:
+            helpers["register_plugin"](self)
+
     def on_after_startup(self):
         self._init_fan()
         self._update_fan_target_temperature()
@@ -146,18 +151,24 @@ class PoppyPlugin(
             }
         }
 
+    ##~~ PSU Control plug-in
 
-# If you want your plugin to be registered within OctoPrint under a different name than what you defined in setup.py
-# ("OctoPrint-PluginSkeleton"), you may define that here. Same goes for the other metadata derived from setup.py that
-# can be overwritten via __plugin_xyz__ control properties. See the documentation for that.
-#__plugin_name__ = "Poppy"
+    def turn_psu_on(self):
+        self._logger.info("Switching power supply on")
 
-# Starting with OctoPrint 1.4.0 OctoPrint will also support to run under Python 3 in addition to the deprecated
-# Python 2. New plugins should make sure to run under both versions for now. Uncomment one of the following
-# compatibility flags according to what Python versions your plugin supports!
-#__plugin_pythoncompat__ = ">=2.7,<3" # only python 2
+    def turn_psu_off(self):
+        self._logger.info("Switching power supply off")
+
+    def get_psu_state(self):
+        self._logger.info("Getting power supply state")
+        return True
+
+    ##~~ Helpers
+
+    def get_fan_external_temperature(self):
+        return self._fan.external_temperature if self._fan else 0
+
 __plugin_pythoncompat__ = ">=3,<4" # only python 3
-#__plugin_pythoncompat__ = ">=2.7,<4" # python 2 and 3
 
 def __plugin_load__():
     global __plugin_implementation__
@@ -168,3 +179,8 @@ def __plugin_load__():
         "octoprint.comm.protocol.temperatures.received": (__plugin_implementation__.get_temperatures, 1),
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
     }
+
+    global __plugin_helpers__
+    __plugin_helpers__ = dict(
+        get_fan_external_temperature = __plugin_implementation__.get_fan_external_temperature
+    )
