@@ -1,3 +1,4 @@
+<h4>Heating</h4>
 <form class="form-horizontal">
     <div class="control-group">
         <label class="control-label">{{ _('Chamber target temperature when heating') }}</label>
@@ -9,6 +10,28 @@
         <label class="control-label">{{ _('Chamber target temperature when cooling') }}</label>
         <div class="controls">
             <input type="text" class="input-block-level" data-bind="value: settings.plugins.poppy.chamber_target_temperature_when_cooling">
+        </div>
+    </div>
+</form>
+
+<h4>Lighting</h4>
+<form class="form-horizontal">
+    <div class="control-group">
+        <label class="control-label">{{ _('Brightness on low') }}</label>
+        <div class="controls">
+            <input type="range" class="input-block-level" data-bind="value: settings.plugins.poppy.chamber_light_brightness_low" min="0" max="100" step="1">
+        </div>
+    </div>
+    <div class="control-group">
+        <label class="control-label">{{ _('Brightness on medium') }}</label>
+        <div class="controls">
+            <input type="range" class="input-block-level" data-bind="value: settings.plugins.poppy.chamber_light_brightness_medium" min="0" max="100" step="1">
+        </div>
+    </div>
+    <div class="control-group">
+        <label class="control-label">{{ _('Brightness on high') }}</label>
+        <div class="controls">
+            <input type="range" class="input-block-level" data-bind="value: settings.plugins.poppy.chamber_light_brightness_high" min="0" max="100" step="1">
         </div>
     </div>
 </form>

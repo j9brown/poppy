@@ -88,8 +88,8 @@ class EMC2101():
         # enable TCRIT override, enable TRIC queuing.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_CONFIG, 0x87)
 
-        # Perform 4 conversions per second.
-        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_CONVERSION_RATE, 6)
+        # Perform 16 conversions per second to allow for better filtering.
+        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_CONVERSION_RATE, 0x08)
 
         # Disable all interrupts because the interrupts are not wired up anyway.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_ALERT_MASK, 0xff)
@@ -118,8 +118,8 @@ class EMC2101():
         # Turn the fan off when the LUT is not used.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_SETTING, 0)
 
-        # Enable averaging level 1 to guard against electrical noise.
-        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_AVERAGING_FILTER, 0x02)
+        # Enable averaging level 2 to guard against electrical noise.
+        self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_AVERAGING_FILTER, 0x06)
 
     def _configure_temperature_limits(self):
         # Set temperature limits for status alerts.
@@ -144,17 +144,18 @@ class EMC2101():
         # is initialized to zero, the fan will be turned off if the LUT remains disabled.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_CONFIG, 0x27)
         if self._target_temperature > 0:
-            # Set hysteresis to 1 to allow for more fine-grained control of the temperature
-            # around the target.
+            # Set hysteresis to a moderately low value to allow for more fine-grained control
+            # of the temperature around the target.  Relies on the filtering to reduce
+            # surges.
             self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_HYSTERESIS, 1)
 
             # Prepare a look-up table designed to keep the temperature close to the target.
-            self._write_lut_entry(0, self._target_temperature - 1, 0)
-            self._write_lut_entry(1, self._target_temperature + 1, 20)
-            self._write_lut_entry(2, self._target_temperature + 2, 40)
-            self._write_lut_entry(3, self._target_temperature + 3, 60)
-            self._write_lut_entry(4, self._target_temperature + 4, 80)
-            self._write_lut_entry(5, self._target_temperature + 5, 100)
+            self._write_lut_entry(0, self._target_temperature, 0)
+            self._write_lut_entry(1, self._target_temperature + 2, 20)
+            self._write_lut_entry(2, self._target_temperature + 4, 40)
+            self._write_lut_entry(3, self._target_temperature + 6, 60)
+            self._write_lut_entry(4, self._target_temperature + 8, 80)
+            self._write_lut_entry(5, self._target_temperature + 10, 100)
             self._write_lut_padding(6)
             self._write_lut_padding(7)
 
@@ -232,3 +233,9 @@ class EMC2101():
     @property
     def status(self):
         return self._status
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()

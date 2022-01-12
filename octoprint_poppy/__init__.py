@@ -8,6 +8,11 @@ from .emc2101 import EMC2101
 _I2C_BUS_NUMBER = 11
 _FAN_POLL_INTERVAL_SECONDS = 2
 
+_LIGHT_MODE_OFF = 0
+_LIGHT_MODE_LOW = 1
+_LIGHT_MODE_MEDIUM = 2
+_LIGHT_MODE_HIGH = 3
+
 class PoppyPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.ShutdownPlugin,
@@ -21,7 +26,10 @@ class PoppyPlugin(
         self._fan_poll_timer = None
         self._heating = False
         self._heating_changed = False
+        self._chamber_light_mode = _LIGHT_MODE_OFF
     
+    ##~~ fan control
+
     def _init_fan(self):
         try:
             self._fan = EMC2101(_I2C_BUS_NUMBER)
@@ -29,7 +37,6 @@ class PoppyPlugin(
             self._logger.error("Failed to initialize the fan controller", exc_info = True)
             self._fan = None
             return
-        self._logger.info("Initialized the fan controller")
         self._fan_poll_timer = RepeatedTimer(_FAN_POLL_INTERVAL_SECONDS, self._poll_fan, run_first = True)
         self._fan_poll_timer.start()
 
@@ -68,7 +75,23 @@ class PoppyPlugin(
                 self._logger.info("new target temperature %s, heating %s",
                         self._fan.target_temperature, self._heating)
             except Exception:
-                self._logger.error("Failed to update fan target temperature", exc_info = True)
+                self._logger.error("Failed to update fan controller target temperature", exc_info = True)
+
+    ##~~ light control
+
+    def _update_chamber_light(self):
+        brightness = self._chamber_light_brightness_for_mode(self._chamber_light_mode)
+        # TODO
+
+    def _chamber_light_brightness_for_mode(self, mode):
+        if mode <= _LIGHT_MODE_OFF:
+            return 0
+        if mode == _LIGHT_MODE_LOW:
+            return self._settings.get_int([chamber_light_brightness_low])
+        if mode == _LIGHT_MODE_MEDIUM:
+            return self._settings.get_int([chamber_light_brightness_medium])
+        return self._settings.get_int([chamber_light_brightness_high])
+
 
     ##~~ StartupPlugin mixin
 
@@ -91,12 +114,16 @@ class PoppyPlugin(
     def get_settings_defaults(self):
         return {
             "chamber_target_temperature_when_heating": 40,
-            "chamber_target_temperature_when_cooling": 30
+            "chamber_target_temperature_when_cooling": 30,
+            "chamber_light_brightness_low": 10,
+            "chamber_light_brightness_medium": 50,
+            "chamber_light_brightness_high": 100
         }
 
     def on_settings_save(self, data):
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         self._update_fan_target_temperature()
+        self._update_chamber_light()
 
     ##~~ AssetPlugin mixin
 
@@ -125,8 +152,9 @@ class PoppyPlugin(
             self._heating_changed = True
 
         if self._fan:
-            parsed_temps["fan_internal"] = (self._fan.internal_temperature, None)
-            parsed_temps["fan_external"] = (self._fan.external_temperature, self._fan.target_temperature)
+            parsed_temps["fan_controller"] = (self._fan.internal_temperature, None)
+            # "chamber" is reserved so use a variation
+            parsed_temps["_chamber"] = (self._fan.external_temperature, self._fan.target_temperature)
         return parsed_temps
 
     ##~~ Softwareupdate hook
@@ -155,18 +183,32 @@ class PoppyPlugin(
 
     def turn_psu_on(self):
         self._logger.info("Switching power supply on")
+        # TODO
 
     def turn_psu_off(self):
         self._logger.info("Switching power supply off")
+        # TODO
 
     def get_psu_state(self):
-        self._logger.info("Getting power supply state")
+        # TODO
         return True
 
     ##~~ Helpers
 
-    def get_fan_external_temperature(self):
+    def get_chamber_temperature(self):
         return self._fan.external_temperature if self._fan else 0
+
+    def set_chamber_light_mode(self, mode):
+        self._logger.info("Setting chamber light mode %s", mode)
+        if mode < _LIGHT_MODE_OFF:
+            mode = _LIGHT_MODE_OFF
+        if mode > _LIGHT_MODE_HIGH:
+            mode = _LIGHT_MODE_HIGH
+        if mode == self._light_mode:
+            return
+        self._chamber_light_mode = mode
+        self._update_chamber_light()
+
 
 __plugin_pythoncompat__ = ">=3,<4" # only python 3
 
@@ -182,5 +224,6 @@ def __plugin_load__():
 
     global __plugin_helpers__
     __plugin_helpers__ = dict(
-        get_fan_external_temperature = __plugin_implementation__.get_fan_external_temperature
+        get_chamber_temperature = __plugin_implementation__.get_chamber_temperature,
+        set_chamber_light_mode = __plugin_implementation__.set_chamber_light_mode
     )
