@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import octoprint.plugin
 from octoprint.util import RepeatedTimer
 from .emc2101 import EMC2101
+from .aw9523 import AW9523
 
 _I2C_BUS_NUMBER = 11
 _FAN_POLL_INTERVAL_SECONDS = 2
@@ -77,11 +78,24 @@ class PoppyPlugin(
             except Exception:
                 self._logger.error("Failed to update fan controller target temperature", exc_info = True)
 
-    ##~~ light control
+    ##~~ light and relay control
+
+    def _init_io(self):
+        try:
+            self._io = AW9523(_I2C_BUS_NUMBER)
+        except Exception:
+            self._logger.error("Failed to initialize the I/O expander", exc_info = True)
+            self._io = None
+            self._relay_pin = None
+            self._led_pin = None
+            return
+        self._io.reset()
+        self._relay_pin = self._io.output_pin(8)
+        self._led_pin = self._io.led_pin(9)
 
     def _update_chamber_light(self):
         brightness = self._chamber_light_brightness_for_mode(self._chamber_light_mode)
-        # TODO
+        self._led_pin.level = int(max(min(brightness * 255 / 100, 255), 0))
 
     def _chamber_light_brightness_for_mode(self, mode):
         if mode <= _LIGHT_MODE_OFF:
@@ -103,6 +117,7 @@ class PoppyPlugin(
     def on_after_startup(self):
         self._init_fan()
         self._update_fan_target_temperature()
+        self._init_io()
 
     ##~~ ShutdownPlugin mixin
 
@@ -183,15 +198,14 @@ class PoppyPlugin(
 
     def turn_psu_on(self):
         self._logger.info("Switching power supply on")
-        # TODO
+        self._relay_pin.state = True
 
     def turn_psu_off(self):
         self._logger.info("Switching power supply off")
-        # TODO
+        self._relay_pin.state = False
 
     def get_psu_state(self):
-        # TODO
-        return True
+        return self._relay_pin.state if self._relay_pin else False
 
     ##~~ Helpers
 
