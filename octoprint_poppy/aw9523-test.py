@@ -8,22 +8,23 @@ def main():
     with AW9523(11) as io:
         if len(sys.argv) == 2 and sys.argv[1] == "reset":
             io.reset()
+            print("reset")
         elif len(sys.argv) == 3 and sys.argv[1] == "input":
             n = int(sys.argv[2])
             pin = io.input_pin(n)
-            print("input %s: %s" % (n, pin.state))
+            print("input pin %s: state %s" % (n, pin.state))
         elif len(sys.argv) == 4 and sys.argv[1] == "output":
             n = int(sys.argv[2])
             state = bool(int(sys.argv[3]))
             pin = io.output_pin(n)
             pin.state = state
-            print("output %s: %s" % (n, pin.state))
+            print("output pin %s: state %s" % (n, pin.state))
         elif len(sys.argv) == 4 and sys.argv[1] == "led":
             n = int(sys.argv[2])
             level = int(sys.argv[3])
             pin = io.led_pin(n)
             pin.level = level
-            print("led %s: %s" % (n, level))
+            print("led pin %s: level %s" % (n, level))
         else:
             print("Unrecognized command.")
             sys.exit(1)

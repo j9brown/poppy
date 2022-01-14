@@ -84,6 +84,7 @@ class AW9523():
             self._io = io
             self._pin = pin
 
+        # State: True (high) or False (low)
         @property
         def state(self):
             return self._io._read_port_bit(self._pin, _REGISTER_PORT_INPUT_BASE)
@@ -93,12 +94,14 @@ class AW9523():
             self._io = io
             self._pin = pin
 
+        # State: True (high) or False (low)
         @property
         def state(self):
             return self._io._read_port_bit(self._pin, _REGISTER_PORT_OUTPUT_BASE)
 
         @state.setter
         def state(self, value):
+            value = bool(value)
             self._io._write_port_bit(self._pin, _REGISTER_PORT_OUTPUT_BASE, value)
 
     class LedPin():
@@ -111,8 +114,12 @@ class AW9523():
             else:
                 self._reg = _REGISTER_PORT_CURRENT_BASE + pin
 
+        # LED current level: 0 (no current) to 255 (maximum current)
         def level(self, value):
-            self._io._bus.write_byte_data(_CHIP_ADDRESS, self._reg, int(value))
+            value = int(value)
+            if value < 0 or value > 255:
+                raise AttributeError("Level must be between 0 and 255")
+            self._io._bus.write_byte_data(_CHIP_ADDRESS, self._reg, value)
 
         # No getter available because the register is not readable.
         level = property(None, level)
