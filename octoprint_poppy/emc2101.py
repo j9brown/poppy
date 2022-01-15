@@ -144,18 +144,18 @@ class EMC2101():
         # is initialized to zero, the fan will be turned off if the LUT remains disabled.
         self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_CONFIG, 0x27)
         if self._target_temperature > 0:
-            # Set hysteresis to a moderately low value to allow for more fine-grained control
+            # Set hysteresis to a low value to allow for more fine-grained control
             # of the temperature around the target.  Relies on the filtering to reduce
             # surges.
             self._bus.write_byte_data(_CHIP_ADDRESS, _REGISTER_FAN_LUT_HYSTERESIS, 1)
 
             # Prepare a look-up table designed to keep the temperature close to the target.
-            self._write_lut_entry(0, self._target_temperature, 0)
-            self._write_lut_entry(1, self._target_temperature + 2, 20)
-            self._write_lut_entry(2, self._target_temperature + 4, 40)
-            self._write_lut_entry(3, self._target_temperature + 6, 60)
-            self._write_lut_entry(4, self._target_temperature + 8, 80)
-            self._write_lut_entry(5, self._target_temperature + 10, 100)
+            self._write_lut_entry(0, 0, 0)
+            self._write_lut_entry(1, self._target_temperature + 1, 20)
+            self._write_lut_entry(2, self._target_temperature + 2, 40)
+            self._write_lut_entry(3, self._target_temperature + 3, 60)
+            self._write_lut_entry(4, self._target_temperature + 4, 80)
+            self._write_lut_entry(5, self._target_temperature + 5, 100)
             self._write_lut_padding(6)
             self._write_lut_padding(7)
 

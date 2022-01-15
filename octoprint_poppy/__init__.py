@@ -33,6 +33,7 @@ class PoppyPlugin(
         self._heating_changed = False
         self._chamber_light_mode = _LIGHT_MODE_OFF
         self._chamber_temperature = None
+        self._chamber_fan_speed = None
 
     ##~~ fan control
 
@@ -71,8 +72,10 @@ class PoppyPlugin(
                 self._fan.target_temperature,
                 self._fan.fan_speed,
                 self._fan.status)
-            if self._fan.external_temperature != self._chamber_temperature:
+            if (self._chamber_temperature != self._fan.external_temperature 
+                    or self._chamber_fan_speed != self._fan.fan_speed):
                 self._chamber_temperature = self._fan.external_temperature
+                self._chamber_fan_speed = self._fan.fan_speed
                 self._notify_clients()
 
     def _update_fan_target_temperature(self):
@@ -158,6 +161,8 @@ class PoppyPlugin(
         data = {}
         if self._chamber_temperature != None:
             data["chamber_temperature"] = self._chamber_temperature
+        if self._chamber_fan_speed != None:
+            data["chamber_fan_speed"] = self._chamber_fan_speed
         data["chamber_light_mode"] = self._chamber_light_mode
         self._plugin_manager.send_plugin_message(self._identifier, data)
 

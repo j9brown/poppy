@@ -1,6 +1,9 @@
 #poppy_chamber_temperature_indicator {
   float: right;
 }
+#poppy_chamber_fan_indicator {
+  margin-left: 15px;
+}
 #poppy_chamber_light_indicator {
   float: right;
 }
