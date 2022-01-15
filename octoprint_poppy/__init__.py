@@ -32,7 +32,8 @@ class PoppyPlugin(
         self._heating = False
         self._heating_changed = False
         self._chamber_light_mode = _LIGHT_MODE_OFF
-    
+        self._chamber_temperature = None
+
     ##~~ fan control
 
     def _init_fan(self):
@@ -70,6 +71,9 @@ class PoppyPlugin(
                 self._fan.target_temperature,
                 self._fan.fan_speed,
                 self._fan.status)
+            if self._fan.external_temperature != self._chamber_temperature:
+                self._chamber_temperature = self._fan.external_temperature
+                self._notify_clients()
 
     def _update_fan_target_temperature(self):
         if self._fan:
@@ -151,9 +155,11 @@ class PoppyPlugin(
             self._notify_clients()
 
     def _notify_clients(self):
-        self._plugin_manager.send_plugin_message(self._identifier, {
-            "chamber_light_mode": self._chamber_light_mode
-        })
+        data = {}
+        if self._chamber_temperature != None:
+            data["chamber_temperature"] = self._chamber_temperature
+        data["chamber_light_mode"] = self._chamber_light_mode
+        self._plugin_manager.send_plugin_message(self._identifier, data)
 
     # ~~ BlueprintPlugin mixin
 
@@ -231,7 +237,7 @@ class PoppyPlugin(
     ##~~ Helpers
 
     def get_chamber_temperature(self):
-        return self._fan.external_temperature if self._fan else 0
+        return self._chamber_temperature if self._chamber_temperature != None else 0
 
     def set_chamber_light_mode(self, mode):
         if mode < _LIGHT_MODE_OFF:

@@ -1,3 +1,7 @@
+<a id="poppy_chamber_temperature_indicator" class="pull-right" title="Chamber Temperature" href="#" data-bind="visible: (chamberTemperature() !== undefined)" style="display: none">
+    <i class="fas fa-thermometer-three-quarters"></i>
+    <span data-bind="text: chamberTemperature()"></span> &#x2103;
+</a>
 <a id="poppy_chamber_light_indicator" class="pull-right" title="Toggle Chamber Light" href="#" data-bind="click: function() { loginState.isUser() && $root.toggleChamberLightMode(); }, visible: (chamberLightMode() !== undefined)" style="display: none">
-    <i class="icon-lightbulb"></i>
+    <i class="fas fa-lightbulb"></i>
 </a>

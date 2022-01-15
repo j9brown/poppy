@@ -1,6 +1,8 @@
+#poppy_chamber_temperature_indicator {
+  float: right;
+}
 #poppy_chamber_light_indicator {
-  font-weight: bold;
-  font-size: 16px;
+  float: right;
 }
 #poppy_chamber_light_indicator.high i {
   color: #ffff80;
