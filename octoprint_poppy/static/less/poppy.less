@@ -1,1 +1,25 @@
-// TODO: Put your plugin's LESS here, have it generated to ../css.
+@poppy-light-high-color: #ffff80;
+@poppy-light-medium-color: #d08000;
+@poppy-light-low-color: #a04000;
+@poppy-light-off-color: #606060;
+
+#poppy_chamber_light_indicator {
+    font-weight: bold;
+    font-size: 16px;
+
+    &.high i {
+        color: @poppy-light-high-color; 
+    }
+
+    &.medium i {
+        color: @poppy-light-medium-color; 
+    }
+
+    &.low i {
+        color: @poppy-light-low-color; 
+    }
+
+    &.off i {
+        color: @poppy-light-off-color; 
+    }
+}

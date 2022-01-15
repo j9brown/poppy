@@ -2,7 +2,9 @@
 from __future__ import absolute_import
 
 import octoprint.plugin
+from octoprint.events import Events
 from octoprint.util import RepeatedTimer
+from flask import make_response
 from .emc2101 import EMC2101
 from .aw9523 import AW9523
 
@@ -18,6 +20,8 @@ class PoppyPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.EventHandlerPlugin,
+    octoprint.plugin.BlueprintPlugin,
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.TemplatePlugin
 ):
@@ -60,7 +64,7 @@ class PoppyPlugin(
             except Exception:
                 self._logger.error("Failed to poll the fan controller", exc_info = True)
                 return
-            self._logger.info("fan: int %s, ext %s, tgt %s, spd %s, status %s",
+            self._logger.debug("fan: int %s, ext %s, tgt %s, spd %s, status %s",
                 self._fan.internal_temperature,
                 self._fan.external_temperature,
                 self._fan.target_temperature,
@@ -101,10 +105,10 @@ class PoppyPlugin(
         if mode <= _LIGHT_MODE_OFF:
             return 0
         if mode == _LIGHT_MODE_LOW:
-            return self._settings.get_int([chamber_light_brightness_low])
+            return self._settings.get_int(["chamber_light_brightness_low"])
         if mode == _LIGHT_MODE_MEDIUM:
-            return self._settings.get_int([chamber_light_brightness_medium])
-        return self._settings.get_int([chamber_light_brightness_high])
+            return self._settings.get_int(["chamber_light_brightness_medium"])
+        return self._settings.get_int(["chamber_light_brightness_high"])
 
 
     ##~~ StartupPlugin mixin
@@ -140,11 +144,27 @@ class PoppyPlugin(
         self._update_fan_target_temperature()
         self._update_chamber_light()
 
+    ##~~ EventHandlerPlugin mixin
+
+    def on_event(self, event, payload):
+        if event == Events.CLIENT_OPENED:
+            self._notify_clients()
+
+    def _notify_clients(self):
+        self._plugin_manager.send_plugin_message(self._identifier, {
+            "chamber_light_mode": self._chamber_light_mode
+        })
+
+    # ~~ BlueprintPlugin mixin
+
+    @octoprint.plugin.BlueprintPlugin.route("/chamberLight/toggleMode", methods=["POST"])
+    def handle_toggle_light_mode_request(self):
+        self.toggle_chamber_light_mode()
+        return make_response('', 200)
+
     ##~~ AssetPlugin mixin
 
     def get_assets(self):
-        # Define your plugin's asset files to automatically include in the
-        # core UI here.
         return {
             "js": ["js/poppy.js"],
             "css": ["css/poppy.css"],
@@ -155,7 +175,8 @@ class PoppyPlugin(
 
     def get_template_configs(self):
         return [
-            dict(type="settings", custom_bindings=False)
+            dict(type="settings"),
+            dict(type="navbar")
         ]
 
     ##~~ Temperatures hook
@@ -213,15 +234,20 @@ class PoppyPlugin(
         return self._fan.external_temperature if self._fan else 0
 
     def set_chamber_light_mode(self, mode):
-        self._logger.info("Setting chamber light mode %s", mode)
         if mode < _LIGHT_MODE_OFF:
             mode = _LIGHT_MODE_OFF
         if mode > _LIGHT_MODE_HIGH:
             mode = _LIGHT_MODE_HIGH
-        if mode == self._light_mode:
+        if mode == self._chamber_light_mode:
             return
+
+        self._logger.info("Setting chamber light mode to %s", mode)
         self._chamber_light_mode = mode
         self._update_chamber_light()
+        self._notify_clients()
+    
+    def toggle_chamber_light_mode(self):
+        self.set_chamber_light_mode(self._chamber_light_mode - 1 if self._chamber_light_mode > _LIGHT_MODE_OFF else _LIGHT_MODE_HIGH)
 
 
 __plugin_pythoncompat__ = ">=3,<4" # only python 3
@@ -239,5 +265,6 @@ def __plugin_load__():
     global __plugin_helpers__
     __plugin_helpers__ = dict(
         get_chamber_temperature = __plugin_implementation__.get_chamber_temperature,
-        set_chamber_light_mode = __plugin_implementation__.set_chamber_light_mode
+        set_chamber_light_mode = __plugin_implementation__.set_chamber_light_mode,
+        toggle_chamber_light_mode = __plugin_implementation__.toggle_chamber_light_mode
     )

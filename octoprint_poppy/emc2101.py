@@ -189,7 +189,7 @@ class EMC2101():
         # Read MSB first to latch LSB
         th = self._bus.read_byte_data(_CHIP_ADDRESS, _REGISTER_TEMP_EXTERNAL_MSB)
         tl = self._bus.read_byte_data(_CHIP_ADDRESS, _REGISTER_TEMP_EXTERNAL_LSB)
-        self._external_temperature = _toSignedByte(th) + tl / 256
+        self._external_temperature = round(_toSignedByte(th) + tl / 256, 1)
 
     def _poll_fan_speed(self):
         # Read LSB first to latch MSB (yes, this is the opposite of external temperature)

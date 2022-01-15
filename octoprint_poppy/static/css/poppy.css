@@ -1,1 +1,16 @@
-/* TODO: Have your plugin's CSS files generated to here. */
+#poppy_chamber_light_indicator {
+  font-weight: bold;
+  font-size: 16px;
+}
+#poppy_chamber_light_indicator.high i {
+  color: #ffff80;
+}
+#poppy_chamber_light_indicator.medium i {
+  color: #d08000;
+}
+#poppy_chamber_light_indicator.low i {
+  color: #a04000;
+}
+#poppy_chamber_light_indicator.off i {
+  color: #606060;
+}

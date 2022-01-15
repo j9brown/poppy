@@ -1,29 +1,54 @@
-/*
- * View model for Poppy
- *
- * Author: Jeff Brown
- * License: AGPLv3
- */
 $(function() {
     function PoppyViewModel(parameters) {
         var self = this;
 
-        // assign the injected parameters, e.g.:
-        // self.loginStateViewModel = parameters[0];
-        // self.settingsViewModel = parameters[1];
+        self.loginState = parameters[0];
+        self.settingsViewModel = parameters[1];
+        self.settings = undefined
 
-        // TODO: Implement your plugin's view model here.
+        self.chamberLightIndicator = $("#poppy_chamber_light_indicator");
+        self.chamberLightMode = ko.observable(undefined);
+
+        self.onBeforeBinding = function() {
+            self.settings = self.settingsViewModel.settings;
+        }
+
+        self.onStartup = function() {
+            self.chamberLightMode.subscribe(function() {
+                self.chamberLightIndicator.removeClass("off low medium high");
+                switch (self.chamberLightMode()) {
+                    case 0:
+                        self.chamberLightIndicator.addClass("off");
+                        break;
+                    case 1:
+                        self.chamberLightIndicator.addClass("low");
+                        break;
+                    case 2:
+                        self.chamberLightIndicator.addClass("medium");
+                        break;
+                    case 3:
+                        self.chamberLightIndicator.addClass("high");
+                        break;
+                }
+            });
+        };
+
+        self.onDataUpdaterPluginMessage = function(plugin, data) {
+            if (plugin == "poppy") {
+                if (data.chamber_light_mode !== undefined) {
+                    self.chamberLightMode(data.chamber_light_mode);
+                }
+            }
+        };
+
+        self.toggleChamberLightMode = function() {
+            $.post(BASEURL + "plugin/poppy/chamberLight/toggleMode");
+        };
     }
 
-    /* view model class, parameters for constructor, container to bind to
-     * Please see http://docs.octoprint.org/en/master/plugins/viewmodels.html#registering-custom-viewmodels for more details
-     * and a full list of the available options.
-     */
     OCTOPRINT_VIEWMODELS.push({
         construct: PoppyViewModel,
-        // ViewModels your plugin depends on, e.g. loginStateViewModel, settingsViewModel, ...
-        dependencies: [ /* "loginStateViewModel", "settingsViewModel" */ ],
-        // Elements to bind to, e.g. #settings_plugin_poppy, #tab_plugin_poppy, ...
-        elements: [ /* ... */ ]
+        dependencies: [ "loginStateViewModel", "settingsViewModel" ],
+        elements: ["#navbar_plugin_poppy", "#settings_plugin_poppy"]
     });
 });
