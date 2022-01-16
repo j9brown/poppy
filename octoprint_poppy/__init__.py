@@ -6,7 +6,7 @@ from octoprint.events import Events
 from octoprint.util import RepeatedTimer
 from flask import make_response
 from .emc2101 import EMC2101
-from .aw9523 import AW9523
+from .pca9685 import PCA9685
 
 _I2C_BUS_NUMBER = 11
 _FAN_POLL_INTERVAL_SECONDS = 2
@@ -15,6 +15,9 @@ _LIGHT_MODE_OFF = 0
 _LIGHT_MODE_LOW = 1
 _LIGHT_MODE_MEDIUM = 2
 _LIGHT_MODE_HIGH = 3
+
+_PIN_RELAY = 0
+_PIN_LED = 1
 
 class PoppyPlugin(
     octoprint.plugin.StartupPlugin,
@@ -29,8 +32,14 @@ class PoppyPlugin(
     def __init__(self):
         self._fan = None
         self._fan_poll_timer = None
+
+        self._io = None
+        self._relay_pin = None
+        self._led_pin = None
+
         self._heating = False
         self._heating_changed = False
+
         self._chamber_light_mode = _LIGHT_MODE_OFF
         self._chamber_temperature = None
         self._chamber_fan_speed = None
@@ -48,13 +57,11 @@ class PoppyPlugin(
         self._fan_poll_timer.start()
 
     def _release_fan(self):
-        fan = self._fan
-        self._fan = None
-        if fan:
-            try:
-                fan.close()
-            except Exception:
-                self._logger.error("Failed to release the fan controller", exc_info = True)
+        if self._fan:
+            self._fan_poll_timer.cancel()
+            self._fan_poll_timer = None
+            self._fan.close()
+            self._fan = None
 
     def _poll_fan(self):
         if self._heating_changed:
@@ -93,20 +100,27 @@ class PoppyPlugin(
 
     def _init_io(self):
         try:
-            self._io = AW9523(_I2C_BUS_NUMBER)
+            self._io = PCA9685(_I2C_BUS_NUMBER)
         except Exception:
             self._logger.error("Failed to initialize the I/O expander", exc_info = True)
             self._io = None
-            self._relay_pin = None
-            self._led_pin = None
             return
         self._io.reset()
-        self._relay_pin = self._io.output_pin(8)
-        self._led_pin = self._io.led_pin(9)
+        self._relay_pin = self._io.pin(_PIN_RELAY)
+        self._led_pin = self._io.pin(_PIN_LED)
+
+    def _release_io(self):
+        if self._io:
+            self._relay_pin = None
+            self._led_pin = None
+            self._io.reset()
+            self._io.close()
+            self._io = None
 
     def _update_chamber_light(self):
         brightness = self._chamber_light_brightness_for_mode(self._chamber_light_mode)
-        self._led_pin.level = int(max(min(brightness * 255 / 100, 255), 0))
+        if self._led_pin:
+            self._led_pin.duty_cycle = int(max(min(brightness * 4096 / 100, 4096), 0))
 
     def _chamber_light_brightness_for_mode(self, mode):
         if mode <= _LIGHT_MODE_OFF:
@@ -116,7 +130,6 @@ class PoppyPlugin(
         if mode == _LIGHT_MODE_MEDIUM:
             return self._settings.get_int(["chamber_light_brightness_medium"])
         return self._settings.get_int(["chamber_light_brightness_high"])
-
 
     ##~~ StartupPlugin mixin
 
@@ -129,11 +142,13 @@ class PoppyPlugin(
         self._init_fan()
         self._update_fan_target_temperature()
         self._init_io()
+        self._update_chamber_light()
 
     ##~~ ShutdownPlugin mixin
 
     def on_shutdown(self):
         self._release_fan()
+        self._release_io()
 
     ##~~ SettingsPlugin mixin
 
@@ -230,11 +245,13 @@ class PoppyPlugin(
 
     def turn_psu_on(self):
         self._logger.info("Switching power supply on")
-        self._relay_pin.state = True
+        if self._relay_pin:
+            self._relay_pin.state = True
 
     def turn_psu_off(self):
         self._logger.info("Switching power supply off")
-        self._relay_pin.state = False
+        if self._relay_pin:
+            self._relay_pin.state = False
 
     def get_psu_state(self):
         return self._relay_pin.state if self._relay_pin else False
