@@ -8,7 +8,15 @@ def main():
     with PCA9685(11) as io:
         if len(sys.argv) == 2 and sys.argv[1] == "reset":
             io.reset()
-            print("reset")
+            print("reset: pwm_freq %s" % (io.pwm_freq))
+        elif len(sys.argv) == 3 and sys.argv[1] == "reset":
+            pwm_freq = int(sys.argv[2])
+            io.reset(pwm_freq)
+            print("reset: pwm_freq %s" % (io.pwm_freq))
+        elif len(sys.argv) == 2 and sys.argv[1] == "status":
+            print("status: pwm_freq %s" % (io.pwm_freq))
+            for n in range(0, 15):
+                print("  pin %s: timings %s" % (n, io.pin(n).timings))
         elif len(sys.argv) == 4 and sys.argv[1] == "state":
             n = int(sys.argv[2])
             state = bool(int(sys.argv[3]))

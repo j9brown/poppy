@@ -16,23 +16,24 @@ _REGISTER_PRE_SCALE = 0xFE
 
 _CLOCK_FREQ = 25000000
 
+# Use a high frequency to minimize strobing effect from the LEDs when
+# viewed through a webcam.
+_DEFAULT_PWM_FREQ = 1200
+
 class PCA9685():
     def __init__(self, bus_number, unit = 0):
         self._bus = SMBus(bus_number)
         self._address = 0x40 + unit
 
-    def reset(self, pwm_freq = 400):
+    def reset(self, pwm_freq = _DEFAULT_PWM_FREQ):
         prescale = int(_CLOCK_FREQ / 4096 / pwm_freq) - 1
         if prescale < 3:
             raise AttributeError("PWM frequency too high")
         if prescale > 255:
             raise AttributeError("PWM frequency too low")
 
-        # Although the chip supports a soft-reset function, it applies to all chips on
-        # the bus rather than individual ones so we set up individual registers instead.
-
-        # Enable PWM, auto-increment, ignore broadcast addresses, push-pull, no inversion.
-        self._bus.write_byte_data(self._address, _REGISTER_MODE1, 0x20)
+        # Sleep, auto-increment, ignore broadcast addresses, push-pull, no output inversion.
+        self._bus.write_byte_data(self._address, _REGISTER_MODE1, 0x30)
 
         # Change PWM output on I2C STOP, push-pull, no inversion, high impedance outputs
         # when output not enabled.
@@ -42,8 +43,14 @@ class PCA9685():
         # Must happen after the MODE2 register's ACK mode bit is set.
         self._bus.write_i2c_block_data(self._address, _REGISTER_ALL_LED_BASE, [0x00, 0x00, 0x00, 0x10])
 
-        # Set prescaler.
+        # Set the prescaler and return from sleep.
         self._bus.write_byte_data(self._address, _REGISTER_PRE_SCALE, prescale)
+        self._bus.write_byte_data(self._address, _REGISTER_MODE1, 0x20)
+
+    @property
+    def pwm_freq(self):
+        prescale = self._bus.read_byte_data(self._address, _REGISTER_PRE_SCALE)
+        return int(_CLOCK_FREQ / 4096 / (prescale + 1))
 
     def pin(self, pin):
         if pin < 0 or pin > 15:
