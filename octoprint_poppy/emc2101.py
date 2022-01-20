@@ -151,11 +151,11 @@ class EMC2101():
 
             # Prepare a look-up table designed to keep the temperature close to the target.
             self._write_lut_entry(0, 0, 0)
-            self._write_lut_entry(1, self._target_temperature, 20)
-            self._write_lut_entry(2, self._target_temperature + 1, 40)
-            self._write_lut_entry(3, self._target_temperature + 2, 60)
-            self._write_lut_entry(4, self._target_temperature + 3, 80)
-            self._write_lut_entry(5, self._target_temperature + 4, 100)
+            self._write_lut_entry(1, self._target_temperature + 1, 20)
+            self._write_lut_entry(2, self._target_temperature + 2, 40)
+            self._write_lut_entry(3, self._target_temperature + 3, 60)
+            self._write_lut_entry(4, self._target_temperature + 4, 80)
+            self._write_lut_entry(5, self._target_temperature + 5, 100)
             self._write_lut_padding(6)
             self._write_lut_padding(7)
 
